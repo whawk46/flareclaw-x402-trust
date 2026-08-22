@@ -42,23 +42,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # NOTE: deliberately NO `registry-url:` here. setup-node's registry-url
-      # writes an .npmrc containing `_authToken=${NODE_AUTH_TOKEN}`, and with
-      # no token set that expands to EMPTY — which overrides the OIDC
-      # credential and makes the publish unauthenticated. npm answers an
-      # unauthenticated write on a scoped package with 404, not 401, so it
-      # reads as "package missing" rather than "not signed in". That is
-      # exactly how the first run of this workflow failed, AFTER successfully
-      # minting the OIDC token and publishing a provenance statement.
+      # registry-url IS required: without it npm never attempts the OIDC
+      # exchange at all and fails ENEEDAUTH. With it, setup-node writes an
+      # .npmrc carrying `_authToken=${NODE_AUTH_TOKEN}`; we delete that one
+      # line below, because an EMPTY token overrides the OIDC credential and
+      # the publish goes out unauthenticated (npm answers that with 404 on a
+      # scoped package, which reads as "package missing" rather than "not
+      # signed in"). Both failure modes were observed on this workflow.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
 
       # OIDC trusted publishing requires npm >= 11.5.1; the npm bundled with
       # setup-node lags. Pin rather than float so a future npm cannot change
       # publish behaviour underneath us without a visible commit.
       - name: Use an npm that speaks OIDC
         run: npm install -g npm@11.9.0
+
+      - name: Drop the empty auth line, keep the registry
+        run: |
+          for f in .npmrc "$RUNNER_TEMP/.npmrc" "$HOME/.npmrc"; do
+            if [ -f "$f" ]; then
+              echo "--- $f (token values masked)"
+              sed -E 's#(_authToken=).*#\1<MASKED>#' "$f"
+              sed -i.bak '/_authToken/d' "$f" && rm -f "$f.bak"
+            fi
+          done
+          echo "npm: $(npm --version)"
+          echo "OIDC request URL present: $([ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && echo yes || echo NO)"
 
       - name: Install
         run: npm install --ignore-scripts
