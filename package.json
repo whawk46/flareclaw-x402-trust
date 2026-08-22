@@ -1,0 +1,49 @@
+{
+  "name": "@flareclaw/x402-trust",
+  "version": "0.2.1",
+  "description": "The trust layer for agents that spend money: check a service before you pay, verify receipts offline, prove the work you did. Reference implementation of the x402 discovery (#2979) and attestations (#3000) extensions. Zero dependencies.",
+  "keywords": [
+    "x402",
+    "agents",
+    "payments",
+    "attestation",
+    "tee",
+    "discovery",
+    "flare"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whawk46/flareclaw-x402-trust.git"
+  },
+  "homepage": "https://github.com/whawk46/flareclaw-x402-trust",
+  "bugs": {
+    "url": "https://github.com/whawk46/flareclaw-x402-trust/issues"
+  }
+}

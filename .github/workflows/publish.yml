@@ -1,0 +1,75 @@
+# Publish @flareclaw/x402-trust to npm via Trusted Publishing (OIDC).
+#
+# WHY THIS RATHER THAN A TOKEN. npm now restricts tokens that bypass 2FA for
+# direct publishing, so a long-lived credential cannot publish this package
+# anyway. More to the point: this package is a trust layer that other people's
+# agents depend on to decide whether to pay someone. A publish credential
+# sitting in a config file somewhere is exactly the asset a supply-chain attack
+# wants. With OIDC there is no such credential — GitHub proves this workflow's
+# identity to npm at publish time, and npm checks it against the trusted
+# publisher configured on the package.
+#
+# `--provenance` additionally records, in a public transparency log, which
+# commit and which workflow produced the tarball. Anyone can verify a release
+# came from this repository rather than from someone's laptop.
+#
+# ONE-TIME SETUP ON npmjs.com (cannot be scripted — it is the human half of the
+# trust relationship):
+#   npmjs.com -> @flareclaw/x402-trust -> Settings -> Trusted Publisher
+#   Publisher:            GitHub Actions
+#   Organization or user: whawk46
+#   Repository:           flareclaw-x402-trust
+#   Workflow filename:    publish.yml
+#   Environment:          (leave empty)
+# After that, DELETE any granular publish token for this package — trusted
+# publishing makes it unnecessary, and an unused write credential is pure risk.
+#
+# To cut a release:  npm version patch && git push --follow-tags
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # REQUIRED — this is what mints the OIDC token
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # OIDC trusted publishing requires npm >= 11.5.1; the npm bundled with
+      # setup-node lags. Pin rather than float so a future npm cannot change
+      # publish behaviour underneath us without a visible commit.
+      - name: Use an npm that speaks OIDC
+        run: npm install -g npm@11.9.0
+
+      - name: Install
+        run: npm install --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      # Fail loudly if the tag and the package version disagree, rather than
+      # publishing something nobody asked for.
+      - name: Tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag v$TAG does not match package.json $PKG" >&2
+            exit 1
+          fi
+          echo "publishing $PKG"
+
+      - name: Publish
+        run: npm publish --access public --provenance
