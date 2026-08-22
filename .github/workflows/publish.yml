@@ -42,10 +42,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NOTE: deliberately NO `registry-url:` here. setup-node's registry-url
+      # writes an .npmrc containing `_authToken=${NODE_AUTH_TOKEN}`, and with
+      # no token set that expands to EMPTY — which overrides the OIDC
+      # credential and makes the publish unauthenticated. npm answers an
+      # unauthenticated write on a scoped package with 404, not 401, so it
+      # reads as "package missing" rather than "not signed in". That is
+      # exactly how the first run of this workflow failed, AFTER successfully
+      # minting the OIDC token and publishing a provenance statement.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       # OIDC trusted publishing requires npm >= 11.5.1; the npm bundled with
       # setup-node lags. Pin rather than float so a future npm cannot change
