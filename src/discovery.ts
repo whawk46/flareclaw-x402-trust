@@ -292,6 +292,15 @@ export function discoveryNamesFor(hostOrUrl: string): string[] {
     }
     host = host.replace(/\.$/, '').replace(/:\d+$/, '');
     if (!host || host.startsWith('.') || host.includes('/') || host.includes(' ')) return [];
+
+    // AN ADDRESS LITERAL HAS NO NAME TO PUBLISH UNDER, so it gets no names at
+    // all — not even itself. The dots in an IPv4 address are not delegation:
+    // without this guard the walk asks for `_x402.0.0.1` and `_x402.0.1`, which
+    // are strangers' zones, and `isWkInDomain(wk, '0.1')` would then accept
+    // whatever was found there as speaking for 127.0.0.1. Found 2026-08-22
+    // wiring this resolver into a suite whose mock target is a loopback literal.
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[') || host.includes(':')) return [];
+
     const labels = host.split('.');
     if (labels.length < 2 || labels.some(l => l === '')) return [host].filter(Boolean);
     const names = [host];
