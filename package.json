@@ -1,6 +1,6 @@
 {
   "name": "@flareclaw/x402-trust",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "The trust layer for agents that spend money: check a service before you pay, verify receipts offline, prove the work you did. Reference implementation of the x402 discovery (#2979) and attestations (#3000) extensions. Zero dependencies.",
   "keywords": [
     "x402",
