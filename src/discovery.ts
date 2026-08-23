@@ -462,10 +462,28 @@ export function diagnoseManifest(m: unknown): { ok: boolean; violations: Manifes
             introducedBy: 'x402-discovery',
         });
     }
-    if (man.kind === 'facilitator' || man.kind === 'both') {
+    // `facilitator` is an OBJECT (the capability block) when kind includes
+    // facilitator, and MAY be a STRING — the base URL of the third-party
+    // facilitator this host routes through — when kind is resource-server.
+    // 12 of 14 publishers carrying the field ship the string (Circadian-agent,
+    // x402#2979), and the spec now gives that incumbent a meaning. What it must
+    // never be is undefined: this block used to report a string as five
+    // missing sub-fields of an object, which told an operator to fix the wrong
+    // thing (doteyeso-ops, x402#2979 review).
+    const facKind = man.kind === 'facilitator' || man.kind === 'both';
+    if (man.facilitator !== undefined && typeof man.facilitator === 'string') {
+        if (facKind) {
+            v.push({ field: 'facilitator', message: 'facilitator must be an object when kind includes facilitator; a string names a third-party facilitator and is permitted only for kind "resource-server"', introducedBy: 'x402-discovery' });
+        } else if (!/^https:\/\/[^\s/?#@]+/i.test(man.facilitator)) {
+            v.push({ field: 'facilitator', message: 'a string facilitator must be the HTTPS base URL of the facilitator this host routes through', introducedBy: 'x402-discovery' });
+        }
+    } else if (man.facilitator !== undefined && (typeof man.facilitator !== 'object' || man.facilitator === null || Array.isArray(man.facilitator))) {
+        v.push({ field: 'facilitator', message: 'facilitator must be an object (capability block) or, for a resource-server, an HTTPS URL string', introducedBy: 'x402-discovery' });
+    }
+    if (facKind && typeof man.facilitator !== 'string') {
         const f = man.facilitator;
-        if (!f) {
-            v.push({ field: 'facilitator', message: 'kind includes facilitator but facilitator block missing', introducedBy: 'x402-discovery' });
+        if (!f || typeof f !== 'object' || Array.isArray(f)) {
+            if (f === undefined) v.push({ field: 'facilitator', message: 'kind includes facilitator but facilitator block missing', introducedBy: 'x402-discovery' });
         } else {
             if (typeof f.baseUrl !== 'string' || !f.baseUrl.startsWith('https://')) {
                 v.push({ field: 'facilitator.baseUrl', message: 'facilitator.baseUrl must be HTTPS', introducedBy: 'x402-discovery' });
