@@ -262,16 +262,24 @@ export function isSafeRelativePath(p: unknown): boolean {
  * zero-import property: there is no second normalizer to disagree with the one
  * already used on the manifest side.
  */
+function toComparableName(rawHost: string): string | null {
+    if (typeof rawHost !== 'string' || rawHost === '') return null;
+    try {
+        // The WHATWG parser does the A-label conversion, so this module keeps
+        // its zero-import property and there is exactly ONE normalizer in it.
+        // Two normalizers is how the halves of a comparison drift apart.
+        return new URL(`https://${rawHost}/`).hostname.toLowerCase().replace(/\.$/, '') || null;
+    } catch {
+        return null;
+    }
+}
+
 function normalizeDnsName(name: string): string | null {
     // A bare DNS name only. Anything that could carry authority or a path is
     // rejected rather than parsed, so a caller passing a URL by mistake cannot
     // have its hostname silently extracted and compared.
-    if (typeof name !== 'string' || name === '' || /[\/?#@:\\\s]/.test(name)) return null;
-    try {
-        return new URL(`https://${name}`).hostname.toLowerCase().replace(/\.$/, '') || null;
-    } catch {
-        return null;
-    }
+    if (typeof name !== 'string' || /[\/?#@:\\\s]/.test(name)) return null;
+    return toComparableName(name);
 }
 
 export function isWkInDomain(wkUrl: string, domain: string): boolean {
@@ -332,6 +340,16 @@ export function discoveryNamesFor(hostOrUrl: string): string[] {
     }
     host = host.replace(/\.$/, '').replace(/:\d+$/, '');
     if (!host || host.startsWith('.') || host.includes('/') || host.includes(' ')) return [];
+    // THE SAME NORMALIZATION ON BOTH INPUT SHAPES. Before this line, a URL
+    // argument was A-labelled by the parser above and a BARE NAME was not, so
+    // `discoveryNamesFor('bücher.de')` and `discoveryNamesFor('https://bücher.de/')`
+    // returned different owner names for one host — and the query went to a
+    // name that does not exist. Same defect class as the same-domain rule
+    // (@Circadian-agent, x402#2979): a value normalized on one path and not
+    // the other.
+    const normalized = toComparableName(host);
+    if (!normalized) return [];
+    host = normalized;
 
     // AN ADDRESS LITERAL HAS NO NAME TO PUBLISH UNDER, so it gets no names at
     // all — not even itself. The dots in an IPv4 address are not delegation:
@@ -362,8 +380,16 @@ export function discoveryNamesFor(hostOrUrl: string): string[] {
  * owner, so a manifest cannot vouch for a host it does not control either.
  */
 export function manifestCoversHost(m: unknown, ownerName: string, host: string): boolean {
-    const owner = ownerName.toLowerCase().replace(/\.$/, '');
-    const target = host.toLowerCase().replace(/\.$/, '');
+    // ALL THREE SIDES OF THIS COMPARISON GO THROUGH ONE NORMALIZER. Previously
+    // `owner` and `target` were lowercased and dot-stripped but never
+    // A-labelled, while the names read out of the manifest were A-labelled by
+    // the URL parser and never dot-stripped — so a manifest naming
+    // `https://api.example.com./x`, or a host given as a U-label, did not match
+    // itself. It failed CLOSED: the ancestor's manifest was judged not to cover
+    // the host, and a conforming publisher dropped out of discovery silently.
+    const owner = toComparableName(ownerName);
+    const target = toComparableName(host);
+    if (!owner || !target) return false;
     if (owner === target) return true;                       // found at the host itself
     if (!(target === owner || target.endsWith(`.${owner}`))) return false;  // not even below it
     if (typeof m !== 'object' || m === null) return false;
@@ -371,7 +397,7 @@ export function manifestCoversHost(m: unknown, ownerName: string, host: string):
     const man = m as Record<string, any>;
     const hostOf = (u: unknown): string | null => {
         if (typeof u !== 'string') return null;
-        try { return new URL(u).hostname.toLowerCase(); } catch { return null; }
+        try { return toComparableName(new URL(u).hostname); } catch { return null; }
     };
     const named: string[] = [];
     const base = hostOf(man.facilitator?.baseUrl);
