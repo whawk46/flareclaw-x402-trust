@@ -235,10 +235,50 @@ export function isSafeRelativePath(p: unknown): boolean {
         && !/[\s\\]/.test(p);
 }
 
+/**
+ * Normalize a DNS name to the form a comparison can be made in: A-labels,
+ * lowercase, no trailing dot.
+ *
+ * BOTH SIDES OF THE COMPARISON GO THROUGH THIS, and that is the whole point.
+ * The previous version lowercased both sides but normalized only one of the
+ * other two axes on each, which made the rule ASYMMETRIC in two places:
+ *
+ *     manifest host `api.example.com.`  vs domain `api.example.com`   → false
+ *     domain        `api.example.com.`  vs host   `api.example.com`   → true
+ *     manifest host `xn--bcher-kva.de`  vs domain `bücher.de`         → false
+ *     domain        `xn--bcher-kva.de`  vs host   `bücher.de`         → true
+ *
+ * The trailing dot is the same name in the DNS and a U-label is the same name
+ * as its A-label, so all four of those are one name compared with itself. Both
+ * false answers FAIL CLOSED into "the wk= is out of domain", which drops a
+ * conforming publisher out of discovery silently — the direction that costs the
+ * publisher and never the crawler, so nobody complains and nothing is logged.
+ *
+ * Found by @Circadian-agent on x402-foundation/x402#2979 as an underspecified
+ * comparison in the extension text; it was also a live defect in this
+ * implementation, in both of the directions they named.
+ *
+ * The WHATWG URL parser does the A-label conversion, so this module keeps its
+ * zero-import property: there is no second normalizer to disagree with the one
+ * already used on the manifest side.
+ */
+function normalizeDnsName(name: string): string | null {
+    // A bare DNS name only. Anything that could carry authority or a path is
+    // rejected rather than parsed, so a caller passing a URL by mistake cannot
+    // have its hostname silently extracted and compared.
+    if (typeof name !== 'string' || name === '' || /[\/?#@:\\\s]/.test(name)) return null;
+    try {
+        return new URL(`https://${name}`).hostname.toLowerCase().replace(/\.$/, '') || null;
+    } catch {
+        return null;
+    }
+}
+
 export function isWkInDomain(wkUrl: string, domain: string): boolean {
     try {
-        const host = new URL(wkUrl).hostname.toLowerCase();
-        const d = domain.toLowerCase().replace(/\.$/, '');
+        const host = new URL(wkUrl).hostname.toLowerCase().replace(/\.$/, '');
+        const d = normalizeDnsName(domain);
+        if (!host || !d) return false;
         return host === d || host.endsWith(`.${d}`);
     } catch {
         return false;
