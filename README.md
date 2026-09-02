@@ -1,5 +1,16 @@
 # @flareclaw/x402-trust
 
+> ⚠️ **NOTICE: This package has graduated to [`@ashlar-blue/x402-trust`](https://www.npmjs.com/package/@ashlar-blue/x402-trust) (v0.5.2+).**  
+> All active development, ISDA CDM lifecycle features, Model Context Protocol (MCP) tooling, and security updates are maintained in the flagship repository at [**`correntelabs/ashlar-blue`**](https://github.com/correntelabs/ashlar-blue) and published under [**`@ashlar-blue/x402-trust`**](https://ashlar.blue).
+>
+> **Migration:**
+> ```bash
+> npm uninstall @flareclaw/x402-trust
+> npm install @ashlar-blue/x402-trust
+> ```
+
+---
+
 **Find an x402 facilitator, and decide whether to trust it before you pay.**
 
 Reference implementation of two proposed x402 extensions:
